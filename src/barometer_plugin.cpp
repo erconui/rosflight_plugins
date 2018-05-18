@@ -23,7 +23,8 @@ BarometerPlugin::BarometerPlugin() : gazebo::ModelPlugin() { }
 
 BarometerPlugin::~BarometerPlugin()
 {
-  gazebo::event::Events::DisconnectWorldUpdateBegin(updateConnection_);
+  updateConnection_.reset();
+  // gazebo::event::Events::DisconnectWorldUpdateBegin(updateConnection_);
   nh_.shutdown();
 }
 
@@ -44,10 +45,10 @@ void BarometerPlugin::Load(gazebo::physics::ModelPtr _model, sdf::ElementPtr _sd
   model_ = _model;
   world_ = model_->GetWorld();
 
-  last_time_ = world_->GetSimTime();
+  last_time_ = world_->SimTime();
 
   namespace_.clear();
-  
+
 
   //
   // Get elements from the robot urdf/sdf file
@@ -66,7 +67,7 @@ void BarometerPlugin::Load(gazebo::physics::ModelPtr _model, sdf::ElementPtr _sd
   link_ = model_->GetLink(link_name_);
   if (link_ == nullptr)
     gzthrow("[barometer_plugin] Couldn't find specified link \"" << link_name_ << "\".");
-  
+
 
   //
   // ROS Node Setup
@@ -99,15 +100,15 @@ void BarometerPlugin::Load(gazebo::physics::ModelPtr _model, sdf::ElementPtr _sd
 void BarometerPlugin::OnUpdate(const gazebo::common::UpdateInfo& _info)
 {
   // check if time to publish
-  gazebo::common::Time current_time = world_->GetSimTime();
+  gazebo::common::Time current_time = world_->SimTime();
   if ((current_time - last_time_).Double() >= sample_time_) {
 
     // pull z measurement out of Gazebo (ENU)
-    gazebo::math::Pose pose = link_->GetWorldPose();
+    ignition::math::Pose3d pose = link_->WorldPose();
 
     // Create a new barometer message
     rosflight_msgs::Barometer msg;
-    msg.altitude = pose.pos.z;
+    msg.altitude = pose.Pos().Z();
 
     // if requested add noise to altitude measurement
     if (noise_on_)
@@ -118,7 +119,7 @@ void BarometerPlugin::OnUpdate(const gazebo::common::UpdateInfo& _info)
     msg.pressure = 101325.0*pow(1- (2.25577e-5 * msg.altitude), 5.25588);
 
     // publish message
-    msg.header.stamp.fromSec(world_->GetSimTime().Double());
+    msg.header.stamp.fromSec(world_->SimTime().Double());
     msg.header.frame_id = link_name_;
     alt_pub_.publish(msg);
 

@@ -23,7 +23,8 @@ MagnetometerPlugin::MagnetometerPlugin() : ModelPlugin() {}
 
 
 MagnetometerPlugin::~MagnetometerPlugin() {
-  gazebo::event::Events::DisconnectWorldUpdateBegin(updateConnection_);
+  updateConnection_.reset();
+  //gazebo::event::Events::DisconnectWorldUpdateBegin(updateConnection_);
   nh_.shutdown();
 }
 
@@ -44,7 +45,7 @@ void MagnetometerPlugin::Load(gazebo::physics::ModelPtr _model, sdf::ElementPtr 
   model_ = _model;
   world_ = model_->GetWorld();
 
-  last_time_ = world_->GetSimTime();
+  last_time_ = world_->SimTime();
 
   namespace_.clear();
 
@@ -93,23 +94,23 @@ void MagnetometerPlugin::Load(gazebo::physics::ModelPtr _model, sdf::ElementPtr 
   uniform_dist_ = std::uniform_real_distribution<double>(-bias_range_, bias_range_);
 
   // Create a bias offset
-  bias_vector_.x = uniform_dist_(random_gen_);
-  bias_vector_.y = uniform_dist_(random_gen_);
-  bias_vector_.z = uniform_dist_(random_gen_);
+  bias_vector_.X(uniform_dist_(random_gen_));
+  bias_vector_.Y(uniform_dist_(random_gen_));
+  bias_vector_.Z(uniform_dist_(random_gen_));
 
   // Figure out inertial magnetic field
   // Gazebo coordinates is NWU and Earth's magnetic field is defined in NED, hence the negative signs
-  inertial_magnetic_field_.z = sin(-inclination_);
-  inertial_magnetic_field_.x = cos(-inclination_)*cos(-declination_);
-  inertial_magnetic_field_.y = cos(-inclination_)*sin(-declination_);
+  inertial_magnetic_field_.X(sin(-inclination_));
+  inertial_magnetic_field_.Y(cos(-inclination_)*cos(-declination_));
+  inertial_magnetic_field_.Z(cos(-inclination_)*sin(-declination_));
 
   // turn off noise and bias of noise_on is disabled
   if (!noise_on_)
   {
     noise_sigma_ = 0;
-    bias_vector_.x = 0;
-    bias_vector_.y = 0;
-    bias_vector_.z = 0;
+    bias_vector_.X(0);
+    bias_vector_.Y(0);
+    bias_vector_.Z(0);
   }
 
   // Fill in static members of message
@@ -125,26 +126,26 @@ void MagnetometerPlugin::Load(gazebo::physics::ModelPtr _model, sdf::ElementPtr 
 void MagnetometerPlugin::OnUpdate(const gazebo::common::UpdateInfo& _info)
 {
   // check if time to publish
-  gazebo::common::Time current_time = world_->GetSimTime();
+  gazebo::common::Time current_time = world_->SimTime();
   if ((current_time - last_time_).Double() >= sample_time_) {
 
-    gazebo::math::Pose I_to_B = link_->GetWorldPose();
+    ignition::math::Pose3d I_to_B = link_->WorldPose();
 
-    gazebo::math::Vector3 noise;
-    noise.x = noise_sigma_*normal_dist_(random_gen_);
-    noise.y = noise_sigma_*normal_dist_(random_gen_);
-    noise.z = noise_sigma_*normal_dist_(random_gen_);
+    ignition::math::Vector3d noise;
+    noise.X(noise_sigma_*normal_dist_(random_gen_));
+    noise.Y(noise_sigma_*normal_dist_(random_gen_));
+    noise.Z(noise_sigma_*normal_dist_(random_gen_));
 
     // combine parts to create a measurement
-    gazebo::math::Vector3 measurement = I_to_B.rot.RotateVectorReverse(inertial_magnetic_field_) + noise + bias_vector_;
+    ignition::math::Vector3d measurement = I_to_B.Rot().RotateVectorReverse(inertial_magnetic_field_) + noise + bias_vector_;
 
     // normalize measurement
-    gazebo::math::Vector3 normalized = measurement.Normalize();
+    ignition::math::Vector3d normalized = measurement.Normalize();
 
-    mag_msg_.header.stamp.fromSec(world_->GetSimTime().Double());
-    mag_msg_.magnetic_field.x =  normalized.x;
-    mag_msg_.magnetic_field.y = -normalized.y; // convert to NED for publishing
-    mag_msg_.magnetic_field.z = -normalized.z;
+    mag_msg_.header.stamp.fromSec(world_->SimTime().Double());
+    mag_msg_.magnetic_field.x =  normalized.X();
+    mag_msg_.magnetic_field.y = -normalized.Y(); // convert to NED for publishing
+    mag_msg_.magnetic_field.z = -normalized.Z();
 
     mag_pub_.publish(mag_msg_);
 

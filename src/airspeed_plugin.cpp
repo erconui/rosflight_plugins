@@ -23,7 +23,8 @@ namespace rosflight_plugins
 AirspeedPlugin::AirspeedPlugin() : ModelPlugin() {}
 
 AirspeedPlugin::~AirspeedPlugin() {
-  gazebo::event::Events::DisconnectWorldUpdateBegin(updateConnection_);
+  updateConnection_.reset();
+  // gazebo::event::Events::DisconnectWorldUpdateBegin(updateConnection_);
   nh_.shutdown();
 }
 
@@ -52,7 +53,7 @@ void AirspeedPlugin::Load(gazebo::physics::ModelPtr _model, sdf::ElementPtr _sdf
   model_ = _model;
   world_ = model_->GetWorld();
 
-  last_time_ = world_->GetSimTime();
+  last_time_ = world_->SimTime();
 
   namespace_.clear();
 
@@ -105,10 +106,10 @@ void AirspeedPlugin::Load(gazebo::physics::ModelPtr _model, sdf::ElementPtr _sdf
 void AirspeedPlugin::OnUpdate(const gazebo::common::UpdateInfo& _info) {
 
   // Calculate Airspeed
-  gazebo::math::Vector3 C_linear_velocity_W_C = link_->GetRelativeLinearVel();
-  double u = C_linear_velocity_W_C.x;
-  double v = -C_linear_velocity_W_C.y;
-  double w = -C_linear_velocity_W_C.z;
+  ignition::math::Vector3d C_linear_velocity_W_C = link_->RelativeLinearVel();
+  double u = C_linear_velocity_W_C.X();
+  double v = -C_linear_velocity_W_C.Y();
+  double w = -C_linear_velocity_W_C.Z();
 
   // TODO: Wind is being applied in the inertial frame, not the body-fixed frame
   // double ur = u - wind_.N;
